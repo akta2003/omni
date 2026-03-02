@@ -53,7 +53,7 @@ static constexpr uint16_t REG_PULSEMS  = 10;  // auto-off belok/diagonal (ms), 0
 // =======================
 // COMMAND CODES
 // =======================
-// 기존 8 arah + stop
+// 8 arah + stop
 static constexpr uint16_t CMD_STOP_COAST  = 0;
 static constexpr uint16_t CMD_MAJU        = 1;
 static constexpr uint16_t CMD_KANAN_ATAS  = 2;
@@ -66,6 +66,7 @@ static constexpr uint16_t CMD_KIRI_ATAS   = 8;
 static constexpr uint16_t CMD_STOP_BRAKE  = 9;
 
 // command tambahan: single motor (8 command)
+// (nomor kamu biarkan seperti ini)
 static constexpr uint16_t CMD_M1_FWD = 12; //motor2
 static constexpr uint16_t CMD_M1_REV = 13; //motor2
 static constexpr uint16_t CMD_M2_FWD = 10; //motor1
@@ -214,16 +215,26 @@ void commitPWMtoNVS() {
 volatile bool     i2cCmdPending = false;
 volatile uint16_t i2cCmdValue   = CMD_STOP_COAST;
 
+// ✅ FIX: validasi command harus menerima 10,11,16,17 juga
 static inline bool isValidCmd(uint16_t c) {
-  return (c <= CMD_STOP_BRAKE) || (c >= CMD_M1_FWD && c <= CMD_M4_REV);
+  // 0..9 valid
+  if (c <= CMD_STOP_BRAKE) return true;
+  // 10..17 valid (single-motor)
+  if (c >= 10 && c <= 17)  return true;
+  return false;
 }
 
 void onI2CReceive(int len) {
   if (len < 1) return;
 
-  // versi kamu kirim 1 byte.
-  // kalau command sampai 17 masih muat 1 byte.
-  uint8_t rx = Wire.read();
+  // Versi kamu: kirim 1 byte.
+  // Kalau master ternyata mengirim lebih dari 1 byte, kita ambil byte TERAKHIR
+  // agar tidak "nyangkut" data sisa.
+  uint8_t rx = 0;
+  while (Wire.available()) {
+    rx = Wire.read();
+  }
+
   uint16_t cmd = (uint16_t)rx;
 
   if (!isValidCmd(cmd)) cmd = CMD_STOP_COAST;
